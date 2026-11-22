@@ -1,0 +1,16 @@
+services:
+  descargas:
+    build: ./servidor_descargas
+    ports:
+      - "8001:8000"
+    volumes:
+      - ./servidor_descargas/archivos:/data:ro
+    environment:
+      - API_KEY=${API_KEY:-}
+    restart: unless-stopped
+
+  # Aquí se añadirá el segundo servidor, p. ej.:
+  # otro_servidor:
+  #   build: ./otro_servidor
+  #   ports:
+  #     - "8001:8001"
