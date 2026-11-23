@@ -1,6 +1,3 @@
--- Esquema del monitor de examen. Postgres lo ejecuta SOLO la primera vez
--- que arranca con el volumen vacío.
-
 -- Un PC físico. Se da de alta solo la primera vez que aparece.
 CREATE TABLE equipos (
     id           TEXT PRIMARY KEY,                 -- MachineGuid del PC
@@ -9,7 +6,7 @@ CREATE TABLE equipos (
     ultima_vez   TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 
--- Una captura concreta (un examen en un PC).
+-- Una captura concreta.
 CREATE TABLE sesiones (
     id                TEXT PRIMARY KEY,             -- UUID generado al iniciar
     equipo_id         TEXT NOT NULL REFERENCES equipos(id),

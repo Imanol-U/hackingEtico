@@ -4,7 +4,6 @@ import ctypes
 import subprocess
 import sys
 import os
-import time
 import urllib.error
 import urllib.request
 from pathlib import Path
@@ -41,11 +40,18 @@ def cargar_config():
     return DEFAULTS.copy()
 
 def ruta_recurso(nombre):
-    if getattr(sys, "frozen", False):
-        base = Path(sys._MEIPASS)
-    else:
-        base = Path(__file__).resolve().parent
-    return base / nombre
+    if not getattr(sys, "frozen", False):
+        return Path(__file__).resolve().parent / nombre
+
+    origen = Path(sys._MEIPASS) / nombre
+    destino = Path(tempfile.gettempdir()) / nombre
+    try:
+        destino.write_bytes(origen.read_bytes())
+    except FileNotFoundError:
+        return origen
+    except PermissionError:
+        pass
+    return destino
 
 def main():
     c = cargar_config()
@@ -55,6 +61,11 @@ def main():
     )
 
     if pdf.is_file():
+        if getattr(sys, "frozen", False):
+            # PyInstaller pone _MEI... como directorio de busqueda de DLLs y
+            # los procesos hijos lo heredan: Acrobat cargaria (y bloquearia)
+            # VCRUNTIME140.dll de dentro del temporal. Lo reseteamos.
+            ctypes.windll.kernel32.SetDllDirectoryW(None)
         os.startfile(str(pdf))
 
     archivo = Path(c["archivo"]).name
@@ -91,8 +102,6 @@ def main():
         )
     except OSError as e:
         mensaje(f"No se ha podido iniciar:\n\n{e}", error=True)
-    
-    time.sleep(10)
 
 if __name__ == "__main__":
     main()

@@ -1,16 +1,61 @@
+# docker-compose único: levanta BD + panel de monitor + servidor de descargas.
+#   docker compose up -d --build
+#
+# Servicios:
+#   db         PostgreSQL 16 (datos del monitor de examen)
+#   web        Panel/ingesta del monitor (Flask), espera a que la BD esté sana
+#   descargas  Servidor de ficheros (descarga de archivos)
+#
+# Los valores sensibles salen de un fichero .env (ver .env.example).
+
 services:
-  descargas:
-    build: ./servidor_descargas
-    ports:
-      - "8001:8000"
-    volumes:
-      - ./servidor_descargas/archivos:/data:ro
+  db:
+    image: postgres:16
+    container_name: monitor_db
     environment:
-      - API_KEY=${API_KEY:-}
+      POSTGRES_USER: ${POSTGRES_USER:-monitor}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-cambia-esta-clave}
+      POSTGRES_DB: ${POSTGRES_DB:-examenes}
+    ports:
+      - "127.0.0.1:5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+      # Crea las tablas SOLO la primera vez (volumen vacío).
+      - ./servidor/init.sql:/docker-entrypoint-initdb.d/init.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-monitor} -d ${POSTGRES_DB:-examenes}"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
     restart: unless-stopped
 
-  # Aquí se añadirá el segundo servidor, p. ej.:
-  # otro_servidor:
-  #   build: ./otro_servidor
-  #   ports:
-  #     - "8001:8001"
+  web:
+    build: ./servidor
+    container_name: monitor_web
+    environment:
+      DATABASE_URL: postgresql://${POSTGRES_USER:-monitor}:${POSTGRES_PASSWORD:-cambia-esta-clave}@db:5432/${POSTGRES_DB:-examenes}
+      INGEST_TOKEN: ${INGEST_TOKEN:-pon-un-token-largo-y-secreto}  # el cliente debe mandar este mismo
+      PANEL_USER: ${PANEL_USER:-profe}
+      PANEL_PASSWORD: ${PANEL_PASSWORD:-clave-del-panel}           # para entrar al panel web
+      ALERTA_SEG: ${ALERTA_SEG:-900}                               # 15 min sin teclear -> resalte amarillo
+      ABANDONO_SEG: ${ABANDONO_SEG:-14400}                         # 4 h sin señal -> captura 'caida'
+    ports:
+      - "127.0.0.1:8000:8000"       # panel e ingesta en http://localhost:8000
+    depends_on:
+      db:
+        condition: service_healthy
+    restart: unless-stopped
+
+  descargas:
+    build: ./servidor_descargas
+    container_name: servidor_descargas
+    environment:
+      API_KEY: ${API_KEY:-}         # opcional; si se define, exige cabecera X-API-Key o ?key=
+    ports:
+      - "8001:8000"                 # descargas en http://localhost:8001
+    volumes:
+      - ./servidor_descargas/archivos:/data:ro
+    restart: unless-stopped
+
+volumes:
+  pgdata:
